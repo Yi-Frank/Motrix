@@ -9,6 +9,11 @@ export function getLogPath () {
   return logger.transports.file.file
 }
 
+export function getDhtPath (protocol) {
+  const name = protocol === 6 ? 'dht6.dat' : 'dht.dat'
+  return resolve(app.getPath('userData'), `./${name}`)
+}
+
 export function getSessionPath () {
   return resolve(app.getPath('userData'), './download.session')
 }
@@ -60,11 +65,55 @@ export function moveAppToApplicationsFolder (errorMsg = '') {
   })
 }
 
+export function splitArgv (argv) {
+  const args = []
+  const extra = {}
+  for (const arg of argv) {
+    if (arg.startsWith('--')) {
+      const kv = arg.split('=')
+      const key = kv[0]
+      const value = kv[1] || '1'
+      extra[key] = value
+      continue
+    }
+    args.push(arg)
+  }
+  return { args, extra }
+}
+
+export function parseArgvAsUrl (argv) {
+  let arg = argv[1]
+  if (!arg) {
+    return
+  }
+
+  if (checkIsSupportedSchema(arg)) {
+    return arg
+  }
+}
+
+export function checkIsSupportedSchema (url = '') {
+  const str = url.toLowerCase()
+  if (
+    str.startsWith('mo:') ||
+    str.startsWith('motrix:') ||
+    str.startsWith('http:') ||
+    str.startsWith('https:') ||
+    str.startsWith('ftp:') ||
+    str.startsWith('magnet:') ||
+    str.startsWith('thunder:')
+  ) {
+    return true
+  } else {
+    return false
+  }
+}
+
 export function isDirectory (path) {
   return existsSync(path) && lstatSync(path).isDirectory()
 }
 
-export function parseArgv (argv) {
+export function parseArgvAsFile (argv) {
   let arg = argv[1]
   if (!arg || isDirectory(arg)) {
     return

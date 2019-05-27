@@ -9,12 +9,27 @@ import { buildFileList } from '@shared/utils'
 const commands = new CommandManager()
 const i18n = getLocaleManager().getI18n()
 
+function updateSystemTheme (theme) {
+  store.dispatch('app/updateSystemTheme', theme)
+}
+
+function updateTheme (theme) {
+  store.dispatch('preference/changeThemeConfig', theme)
+}
+
 function showAboutPanel () {
   store.dispatch('app/showAboutPanel')
 }
 
-function showAddTask (taskType = 'uri') {
+function showAddTask (taskType = 'uri', task = '') {
+  if (taskType === 'uri' && task) {
+    store.dispatch('app/updateAddTaskUrl', task)
+  }
   store.dispatch('app/showAddTaskDialog', taskType)
+}
+
+function showAddBtTask () {
+  store.dispatch('app/showAddTaskDialog', 'torrent')
 }
 
 function showAddBtTaskWithFile (fileName, base64Data = '') {
@@ -67,9 +82,11 @@ function resumeAllTask () {
   store.dispatch('task/resumeAllTask')
 }
 
+commands.register('application:system-theme', updateSystemTheme)
+commands.register('application:theme', updateTheme)
 commands.register('application:about', showAboutPanel)
 commands.register('application:new-task', showAddTask)
-commands.register('application:new-bt-task', showAddTask)
+commands.register('application:new-bt-task', showAddBtTask)
 commands.register('application:new-bt-task-with-file', showAddBtTaskWithFile)
 commands.register('application:task-list', navigateTaskList)
 commands.register('application:preferences', navigatePreferences)
