@@ -234,10 +234,11 @@
           })
         }
       },
-      handleTorrentChange (torrent, file, fileList) {
+      handleTorrentChange (torrent, file, fileList, selectFileStr) {
         // TODO 种子选择部分文件下载
         // console.log('handleTorrentChange===>', torrent, file, fileList)
         this.form.torrent = torrent
+        this.form.btSelectFiles = selectFileStr
       },
       handleSplitChange (value) {
         console.log('handleSplitChange===>', value)
@@ -303,8 +304,12 @@
         return result
       },
       buildTorrentPayload (form) {
-        const { torrent } = form
+        const { torrent, btSelectFiles } = form
         const options = this.buildOption(form)
+        if (btSelectFiles !== '') {
+          options['select-file'] = btSelectFiles
+          options['bt-remove-unselected-file'] = 'true'
+        }
         const result = {
           torrent,
           options
