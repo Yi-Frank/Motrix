@@ -12,6 +12,20 @@
         :model="form"
         :rules="rules">
         <el-form-item :label="`${$t('preferences.startup')}: `" :label-width="formLabelWidth">
+          <el-col
+            class="form-item-sub"
+            :span="24"
+            v-if="!isLinux()"
+          >
+            <el-checkbox v-model="form.openAtLogin">
+              {{ $t('preferences.open-at-login') }}
+            </el-checkbox>
+          </el-col>
+          <el-col class="form-item-sub" :span="24">
+            <el-checkbox v-model="form.keepWindowState">
+              {{ $t('preferences.keep-window-state') }}
+            </el-checkbox>
+          </el-col>
           <el-col class="form-item-sub" :span="24">
             <el-checkbox v-model="form.resumeAllWhenAppLaunched">
               {{ $t('preferences.auto-resume-all') }}
@@ -36,7 +50,7 @@
             />
           </el-input>
           <div class="el-form-item__info" v-if="isMas()" style="margin-top: 8px;">
-            {{ $t('preferences.mas-default-dir-tip') }}
+            {{ $t('preferences.mas-default-dir-tips') }}
           </div>
         </el-form-item>
         <el-form-item :label="`${$t('preferences.task-manage')}: `" :label-width="formLabelWidth">
@@ -93,27 +107,31 @@
 
   const initialForm = (config) => {
     const {
+      autoCheckUpdate,
       dir,
-      split,
-      resumeAllWhenAppLaunched,
+      keepWindowState,
+      lastCheckUpdateTime,
       maxConcurrentDownloads,
       maxConnectionPerServer,
-      taskNotification,
-      autoCheckUpdate,
       newTaskShowDownloading,
-      lastCheckUpdateTime
+      openAtLogin,
+      resumeAllWhenAppLaunched,
+      split,
+      taskNotification
     } = config
     const result = {
-      dir,
-      split,
+      autoCheckUpdate,
       continue: config.continue,
-      resumeAllWhenAppLaunched,
+      dir,
+      keepWindowState,
+      lastCheckUpdateTime,
       maxConcurrentDownloads,
       maxConnectionPerServer,
-      taskNotification,
-      autoCheckUpdate,
       newTaskShowDownloading,
-      lastCheckUpdateTime
+      openAtLogin,
+      resumeAllWhenAppLaunched,
+      split,
+      taskNotification
     }
     return result
   }
@@ -144,6 +162,7 @@
     methods: {
       isRenderer: is.renderer,
       isMas: is.mas,
+      isLinux: is.linux,
       onDirectorySelected (dir) {
         this.form.dir = dir
       },
@@ -154,8 +173,14 @@
             return false
           }
 
-          this.$store.dispatch('preference/save', this.form)
+          const data = {
+            ...this.form
+          }
+          const { openAtLogin } = data
+
+          this.$store.dispatch('preference/save', data)
           if (this.isRenderer()) {
+            this.$electron.ipcRenderer.send('command', 'application:open-at-login', openAtLogin)
             this.$electron.ipcRenderer.send('command', 'application:relaunch')
           }
         })

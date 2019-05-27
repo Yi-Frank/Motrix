@@ -15,8 +15,20 @@ export const availableLanguages = [
     label: 'English'
   },
   {
+    value: 'fa',
+    label: 'فارسی'
+  },
+  {
     value: 'fr',
     label: 'Français'
+  },
+  {
+    value: 'ja',
+    label: '日本語'
+  },
+  {
+    value: 'ko',
+    label: '한국어'
   },
   {
     value: 'pt-BR',
@@ -44,6 +56,9 @@ function checkLngIsAvailable (locale) {
  * getLanguage
  * @param { String } locale
  * https://electronjs.org/docs/api/locales
+ *
+ * You need to add a fallback when there are
+ * multiple locale keys with the same prefix
  */
 export function getLanguage (locale = 'en-US') {
   if (checkLngIsAvailable(locale)) {

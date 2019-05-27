@@ -8,6 +8,7 @@ import logger from './core/Logger'
 import ConfigManager from './core/ConfigManager'
 import { setupLocaleManager } from '@/ui/Locale'
 import Engine from './core/Engine'
+import AutoLaunchManager from './core/AutoLaunchManager'
 import UpdateManager from './core/UpdateManager'
 import EnergyManager from './core/EnergyManager'
 import ProtocolManager from './core/ProtocolManager'
@@ -15,6 +16,8 @@ import WindowManager from './ui/WindowManager'
 import MenuManager from './ui/MenuManager'
 import TouchBarManager from './ui/TouchBarManager'
 import TrayManager from './ui/TrayManager'
+import ThemeManager from './ui/ThemeManager'
+import { AUTO_CHECK_UPDATE_INTERVAL } from '@shared/constants'
 
 export default class Application extends EventEmitter {
   constructor () {
@@ -30,9 +33,12 @@ export default class Application extends EventEmitter {
     this.localeManager = setupLocaleManager(this.locale)
     this.i18n = this.localeManager.getI18n()
 
-    this.windowManager = new WindowManager({
-      userConfig: this.configManager.getUserConfig()
-    })
+    this.menuManager = new MenuManager()
+    this.menuManager.setup(this.locale)
+
+    this.initTouchBarManager()
+
+    this.initWindowManager()
 
     this.engine = new Engine({
       systemConfig: this.configManager.getSystemConfig(),
@@ -40,12 +46,11 @@ export default class Application extends EventEmitter {
     })
     this.startEngine()
 
-    this.menuManager = new MenuManager()
-    this.menuManager.setup(this.locale)
-
-    this.touchBarManager = new TouchBarManager()
-
     this.trayManager = new TrayManager()
+
+    this.autoLaunchManager = new AutoLaunchManager()
+
+    this.initThemeManager()
 
     this.energyManager = new EnergyManager()
 
@@ -54,6 +59,7 @@ export default class Application extends EventEmitter {
     this.initProtocolManager()
 
     this.handleCommands()
+
     this.handleIpcMessages()
   }
 
@@ -74,17 +80,53 @@ export default class Application extends EventEmitter {
     }
   }
 
-  start (page) {
-    this.showPage(page)
+  initWindowManager () {
+    this.windowManager = new WindowManager({
+      userConfig: this.configManager.getUserConfig()
+    })
+
+    this.windowManager.on('window-resized', (data) => {
+      this.storeWindowState(data)
+    })
+    this.windowManager.on('window-moved', (data) => {
+      this.storeWindowState(data)
+    })
+    this.windowManager.on('window-closed', (data) => {
+      this.storeWindowState(data)
+    })
   }
 
-  showPage (page) {
-    const win = this.windowManager.openWindow(page)
+  storeWindowState (data = {}) {
+    const enabled = this.configManager.getUserConfig('keep-window-state')
+    if (!enabled) {
+      return
+    }
+
+    const state = this.configManager.getUserConfig('window-state', {})
+    const { page, bounds } = data
+    const newState = {
+      ...state,
+      [page]: bounds
+    }
+    this.configManager.setUserConfig('window-state', newState)
+  }
+
+  start (page, options = {}) {
+    this.showPage(page, options)
+  }
+
+  showPage (page, options = {}) {
+    const { openedAtLogin } = options
+    const win = this.windowManager.openWindow(page, {
+      hidden: openedAtLogin
+    })
     win.once('ready-to-show', () => {
       this.isReady = true
       this.emit('ready')
     })
-    this.touchBarManager.setup(page, win)
+    if (is.macOS()) {
+      this.touchBarManager.setup(page, win)
+    }
   }
 
   show (page = 'index') {
@@ -110,6 +152,7 @@ export default class Application extends EventEmitter {
   stop () {
     this.engine.stop()
     this.energyManager.stopPowerSaveBlocker()
+    this.trayManager.destroy()
   }
 
   sendCommand (command, ...args) {
@@ -133,6 +176,21 @@ export default class Application extends EventEmitter {
     this.windowManager.getWindowList().forEach(window => {
       this.windowManager.sendMessageTo(window, channel, ...args)
     })
+  }
+
+  initThemeManager () {
+    this.themeManager = new ThemeManager()
+    this.themeManager.on('system-theme-changed', (theme) => {
+      this.trayManager.changeIconTheme(theme)
+      this.sendCommandToAll('application:system-theme', theme)
+    })
+  }
+
+  initTouchBarManager () {
+    if (!is.macOS()) {
+      return
+    }
+    this.touchBarManager = new TouchBarManager()
   }
 
   initProtocolManager () {
@@ -180,12 +238,20 @@ export default class Application extends EventEmitter {
       return
     }
     this.updateManager = new UpdateManager({
-      autoCheck: this.configManager.getUserConfig('auto-check-update')
-        ? (new Date().getTime() - this.configManager.getUserConfig('last-check-update-time') > 7 * 24 * 60 * 60 * 1000)
-        : false,
+      autoCheck: this.isNeedAutoCheck(),
       setCheckTime: this.configManager
     })
     this.handleUpdaterEvents()
+  }
+
+  isNeedAutoCheck () {
+    const enable = this.configManager.getUserConfig('auto-check-update')
+    if (!enable) {
+      return false
+    }
+
+    const lastCheck = this.configManager.getUserConfig('last-check-update-time')
+    return (Date.now() - lastCheck > AUTO_CHECK_UPDATE_INTERVAL)
   }
 
   handleUpdaterEvents () {
@@ -236,8 +302,21 @@ export default class Application extends EventEmitter {
     })
 
     this.on('application:exit', () => {
-      this.engine.stop()
+      this.stop()
       app.exit()
+    })
+
+    this.on('application:open-at-login', (openAtLogin) => {
+      console.log('application:open-at-login===>', openAtLogin)
+      if (is.linux()) {
+        return
+      }
+
+      if (openAtLogin) {
+        this.autoLaunchManager.enable()
+      } else {
+        this.autoLaunchManager.disable()
+      }
     })
 
     this.on('application:show', (page) => {
@@ -255,6 +334,11 @@ export default class Application extends EventEmitter {
 
     this.on('application:check-for-updates', () => {
       this.updateManager.check()
+    })
+
+    this.on('application:change-theme', (theme) => {
+      this.themeManager.updateAppAppearance(theme)
+      this.sendCommandToAll('application:theme', theme)
     })
 
     this.on('application:change-locale', (locale) => {
