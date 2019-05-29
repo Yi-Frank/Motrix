@@ -11,34 +11,6 @@
         size="mini"
         :model="form"
         :rules="rules">
-        <el-form-item :label="`${$t('preferences.appearance')}: `" :label-width="formLabelWidth">
-          <el-col class="form-item-sub" :span="24">
-            <mo-theme-switcher
-              v-model="form.theme"
-              @change="handleThemeChange"
-            />
-          </el-col>
-          <el-col v-if="showHideAppMenuOption" class="form-item-sub" :span="16">
-            <el-checkbox v-model="form.hideAppMenu">
-              {{ $t('preferences.hide-app-menu') }}
-            </el-checkbox>
-          </el-col>
-        </el-form-item>
-        <el-form-item :label="`${$t('preferences.language')}: `" :label-width="formLabelWidth">
-          <el-col class="form-item-sub" :span="16">
-            <el-select
-              v-model="form.locale"
-              @change="handleLocaleChange"
-              :placeholder="$t('preferences.change-language')">
-              <el-option
-                v-for="item in locales"
-                :key="item.value"
-                :label="item.label"
-                :value="item.value">
-              </el-option>
-            </el-select>
-          </el-col>
-        </el-form-item>
         <el-form-item :label="`${$t('preferences.proxy')}: `" :label-width="formLabelWidth">
           <el-switch
             v-model="form.useProxy"
@@ -80,7 +52,7 @@
                     width="12"
                     height="12"
                     :spin="true"
-                    v-if="isSyncTracker"
+                    v-if="trackerSyncing"
                   />
                   <mo-icon name="sync" width="12" height="12" v-else />
                 </el-button>
@@ -149,14 +121,13 @@
 <script>
   import is from 'electron-is'
   import { mapState } from 'vuex'
-  import ThemeSwitcher from '@/components/Preference/ThemeSwitcher'
+  import { cloneDeep } from 'lodash'
   import ShowInFolder from '@/components/Native/ShowInFolder'
   import userAgentMap from '@shared/ua'
-  import { availableLanguages, getLanguage } from '@shared/locales'
-  import { getLocaleManager } from '@/components/Locale'
   import {
     convertCommaToLine,
-    convertLineToComma
+    convertLineToComma,
+    diffConfig
   } from '@shared/utils'
   import '@/components/Icons/sync'
   import '@/components/Icons/refresh'
@@ -167,8 +138,6 @@
       allProxyBackup,
       btTracker,
       hideAppMenu,
-      locale,
-      theme,
       useProxy,
       userAgent
     } = config
@@ -177,8 +146,6 @@
       allProxyBackup,
       btTracker: convertCommaToLine(btTracker),
       hideAppMenu,
-      locale,
-      theme,
       useProxy,
       userAgent
     }
@@ -188,17 +155,16 @@
   export default {
     name: 'mo-preference-advanced',
     components: {
-      [ThemeSwitcher.name]: ThemeSwitcher,
       [ShowInFolder.name]: ShowInFolder
     },
     data: function () {
+      const form = initialForm(this.$store.state.preference.config)
       return {
+        form,
         formLabelWidth: '23%',
-        form: initialForm(this.$store.state.preference.config),
-        isSyncTracker: false,
+        formOriginal: cloneDeep(form),
         rules: {},
-        color: '#c00',
-        locales: availableLanguages
+        trackerSyncing: false
       }
     },
     computed: {
@@ -218,24 +184,15 @@
     },
     methods: {
       isRenderer: is.renderer,
-      handleLocaleChange (locale) {
-        const lng = getLanguage(locale)
-        getLocaleManager().changeLanguage(lng)
-        this.$electron.ipcRenderer.send('command', 'application:change-locale', lng)
-      },
-      handleThemeChange (theme) {
-        this.form.theme = theme
-        this.$electron.ipcRenderer.send('command', 'application:change-theme', theme)
-      },
       syncTrackerFromGitHub () {
-        this.isSyncTracker = true
+        this.trackerSyncing = true
         this.$store.dispatch('preference/fetchBtTracker')
           .then((data) => {
             console.log('syncTrackerFromGitHub data====>', data)
             this.form.btTracker = data
           })
           .finally(() => {
-            this.isSyncTracker = false
+            this.trackerSyncing = false
           })
       },
       onUseProxyChange (flag) {
@@ -270,15 +227,23 @@
             console.log('error submit!!')
             return false
           }
+          const changed = diffConfig(this.formOriginal, this.form)
           const data = {
-            ...this.form,
+            ...changed,
             btTracker: convertLineToComma(this.form.btTracker)
           }
+          console.log('changed====》', data)
 
-          console.log('this.form===>', data)
           this.$store.dispatch('preference/save', data)
+            .then(() => {
+              this.$store.dispatch('app/fetchEngineOptions')
+              this.$msg.success(this.$t('preferences.save-success-message'))
+            })
+            .catch(() => {
+              this.$msg.success(this.$t('preferences.save-fail-message'))
+            })
+
           if (this.isRenderer()) {
-            this.$electron.ipcRenderer.send('command', 'application:relaunch')
           }
         })
       },
