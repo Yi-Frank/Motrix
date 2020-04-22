@@ -5,6 +5,7 @@ import { Message } from 'element-ui'
 import { getLocaleManager } from '@/components/Locale'
 import { base64StringToBlob } from 'blob-util'
 import { buildFileList } from '@shared/utils'
+import { ADD_TASK_TYPE } from '@shared/constants'
 
 const commands = new CommandManager()
 const i18n = getLocaleManager().getI18n()
@@ -21,33 +22,37 @@ function showAboutPanel () {
   store.dispatch('app/showAboutPanel')
 }
 
-function showAddTask (taskType = 'uri', task = '') {
-  if (taskType === 'uri' && task) {
+function showAddTask (taskType = ADD_TASK_TYPE.URI, task = '') {
+  if (taskType === ADD_TASK_TYPE.URI && task) {
     store.dispatch('app/updateAddTaskUrl', task)
   }
   store.dispatch('app/showAddTaskDialog', taskType)
 }
 
 function showAddBtTask () {
-  store.dispatch('app/showAddTaskDialog', 'torrent')
+  store.dispatch('app/showAddTaskDialog', ADD_TASK_TYPE.TORRENT)
 }
 
 function showAddBtTaskWithFile (fileName, base64Data = '') {
   const blob = base64StringToBlob(base64Data, 'application/x-bittorrent')
   const file = new File([blob], fileName, { type: 'application/x-bittorrent' })
   const fileList = buildFileList(file)
-  store.dispatch('app/showAddTaskDialog', 'torrent')
+  store.dispatch('app/showAddTaskDialog', ADD_TASK_TYPE.TORRENT)
   setTimeout(() => {
     store.dispatch('app/addTaskAddTorrents', { fileList })
   }, 200)
 }
 
 function navigateTaskList (status = 'active') {
-  router.push({ path: `/task/${status}` })
+  router.push({ path: `/task/${status}` }).catch(err => {
+    console.log(err)
+  })
 }
 
 function navigatePreferences () {
-  router.push({ path: '/preference' })
+  router.push({ path: '/preference' }).catch(err => {
+    console.log(err)
+  })
 }
 
 function showUnderDevelopmentMessage () {
@@ -82,6 +87,10 @@ function resumeAllTask () {
   store.dispatch('task/resumeAllTask')
 }
 
+function selectAllTask () {
+  store.dispatch('task/selectAllTask')
+}
+
 commands.register('application:system-theme', updateSystemTheme)
 commands.register('application:theme', updateTheme)
 commands.register('application:about', showAboutPanel)
@@ -98,6 +107,7 @@ commands.register('application:move-task-up', moveTaskUp)
 commands.register('application:move-task-down', moveTaskDown)
 commands.register('application:pause-all-task', pauseAllTask)
 commands.register('application:resume-all-task', resumeAllTask)
+commands.register('application:select-all-task', selectAllTask)
 
 export {
   commands

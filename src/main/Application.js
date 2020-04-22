@@ -3,11 +3,13 @@ import { app, shell, dialog, ipcMain } from 'electron'
 import is from 'electron-is'
 import { readFile } from 'fs'
 import { extname, basename } from 'path'
+import { isEmpty } from 'lodash'
 
 import logger from './core/Logger'
 import ConfigManager from './core/ConfigManager'
 import { setupLocaleManager } from '@/ui/Locale'
 import Engine from './core/Engine'
+import EngineClient from './core/EngineClient'
 import AutoLaunchManager from './core/AutoLaunchManager'
 import UpdateManager from './core/UpdateManager'
 import EnergyManager from './core/EnergyManager'
@@ -16,8 +18,11 @@ import WindowManager from './ui/WindowManager'
 import MenuManager from './ui/MenuManager'
 import TouchBarManager from './ui/TouchBarManager'
 import TrayManager from './ui/TrayManager'
+import DockManager from './ui/DockManager'
 import ThemeManager from './ui/ThemeManager'
-import { AUTO_CHECK_UPDATE_INTERVAL } from '@shared/constants'
+import { AUTO_SYNC_TRACKER_INTERVAL, AUTO_CHECK_UPDATE_INTERVAL } from '@shared/constants'
+import { checkIsNeedRun } from '@shared/utils'
+import { convertTrackerDataToComma, fetchBtTrackerFromSource } from '@shared/utils/tracker'
 
 export default class Application extends EventEmitter {
   constructor () {
@@ -46,13 +51,23 @@ export default class Application extends EventEmitter {
     })
     this.startEngine()
 
-    this.trayManager = new TrayManager()
+    this.initEngineClient()
+
+    this.autoSyncTracker()
+
+    this.trayManager = new TrayManager({
+      theme: this.configManager.getUserConfig('tray-theme')
+    })
+
+    this.dockManager = new DockManager({
+      runMode: this.configManager.getUserConfig('run-mode')
+    })
 
     this.autoLaunchManager = new AutoLaunchManager()
 
-    this.initThemeManager()
-
     this.energyManager = new EnergyManager()
+
+    this.initThemeManager()
 
     this.initUpdaterManager()
 
@@ -60,10 +75,14 @@ export default class Application extends EventEmitter {
 
     this.handleCommands()
 
+    this.handleEvents()
+
     this.handleIpcMessages()
   }
 
   startEngine () {
+    const self = this
+
     try {
       this.engine.start()
     } catch (err) {
@@ -72,12 +91,45 @@ export default class Application extends EventEmitter {
         type: 'error',
         title: this.i18n.t('app.system-error-title'),
         message: this.i18n.t('app.system-error-message', { message })
-      }, () => {
+      }).then(_ => {
         setTimeout(() => {
-          app.quit()
+          self.quit()
         }, 100)
       })
     }
+  }
+
+  initEngineClient () {
+    const port = this.configManager.getSystemConfig('rpc-listen-port')
+    const secret = this.configManager.getSystemConfig('rpc-secret')
+    this.engineClient = new EngineClient({
+      port,
+      secret
+    })
+  }
+
+  autoSyncTracker () {
+    const enable = this.configManager.getUserConfig('auto-sync-tracker')
+    const lastTime = this.configManager.getUserConfig('last-sync-tracker-time')
+    const result = checkIsNeedRun(enable, lastTime, AUTO_SYNC_TRACKER_INTERVAL)
+    if (!result) {
+      return
+    }
+
+    setTimeout(() => {
+      const source = this.configManager.getUserConfig('tracker-source')
+      fetchBtTrackerFromSource(source).then((data) => {
+        const tracker = convertTrackerDataToComma(data)
+        this.savePreference({
+          system: {
+            'bt-tracker': tracker
+          },
+          user: {
+            'last-sync-tracker-time': Date.now()
+          }
+        })
+      })
+    }, 3000)
   }
 
   initWindowManager () {
@@ -112,14 +164,8 @@ export default class Application extends EventEmitter {
   }
 
   start (page, options = {}) {
-    this.showPage(page, options)
-  }
+    const win = this.showPage(page, options)
 
-  showPage (page, options = {}) {
-    const { openedAtLogin } = options
-    const win = this.windowManager.openWindow(page, {
-      hidden: openedAtLogin
-    })
     win.once('ready-to-show', () => {
       this.isReady = true
       this.emit('ready')
@@ -129,13 +175,21 @@ export default class Application extends EventEmitter {
     }
   }
 
+  showPage (page, options = {}) {
+    const { openedAtLogin } = options
+    const autoHideWindow = this.configManager.getUserConfig('auto-hide-window')
+    return this.windowManager.openWindow(page, {
+      hidden: openedAtLogin || autoHideWindow
+    })
+  }
+
   show (page = 'index') {
     this.windowManager.showWindow(page)
   }
 
   hide (page) {
     if (page) {
-      this.windowManager.hideWindow(page)
+      this.windowManager.autoHideWindow(page)
     } else {
       this.windowManager.hideAllWindow()
     }
@@ -150,9 +204,19 @@ export default class Application extends EventEmitter {
   }
 
   stop () {
-    this.engine.stop()
-    this.energyManager.stopPowerSaveBlocker()
-    this.trayManager.destroy()
+    try {
+      this.engineClient.shutdown()
+      this.trayManager.destroy()
+      this.engine.stop()
+      this.energyManager.stopPowerSaveBlocker()
+    } catch (err) {
+      logger.warn(`[Motrix] stop error: `, err.message)
+    }
+  }
+
+  quit () {
+    this.stop()
+    app.quit()
   }
 
   sendCommand (command, ...args) {
@@ -197,7 +261,10 @@ export default class Application extends EventEmitter {
     if (is.dev() || is.mas()) {
       return
     }
-    this.protocolManager = new ProtocolManager()
+    const protocols = this.configManager.getUserConfig('protocols', {})
+    this.protocolManager = new ProtocolManager({
+      protocols
+    })
   }
 
   handleProtocol (url) {
@@ -237,26 +304,20 @@ export default class Application extends EventEmitter {
     if (is.mas()) {
       return
     }
+
+    const enable = this.configManager.getUserConfig('auto-check-update')
+    const lastTime = this.configManager.getUserConfig('last-check-update-time')
     this.updateManager = new UpdateManager({
-      autoCheck: this.isNeedAutoCheck(),
-      setCheckTime: this.configManager
+      autoCheck: checkIsNeedRun(enable, lastTime, AUTO_CHECK_UPDATE_INTERVAL)
     })
     this.handleUpdaterEvents()
-  }
-
-  isNeedAutoCheck () {
-    const enable = this.configManager.getUserConfig('auto-check-update')
-    if (!enable) {
-      return false
-    }
-
-    const lastCheck = this.configManager.getUserConfig('last-check-update-time')
-    return (Date.now() - lastCheck > AUTO_CHECK_UPDATE_INTERVAL)
   }
 
   handleUpdaterEvents () {
     this.updateManager.on('checking', (event) => {
       this.menuManager.updateMenuItemEnabledState('app.check-for-updates', false)
+      this.trayManager.updateMenuItemEnabledState('app.check-for-updates', false)
+      this.configManager.setUserConfig('last-check-update-time', Date.now())
     })
 
     this.updateManager.on('download-progress', (event) => {
@@ -266,10 +327,12 @@ export default class Application extends EventEmitter {
 
     this.updateManager.on('update-not-available', (event) => {
       this.menuManager.updateMenuItemEnabledState('app.check-for-updates', true)
+      this.trayManager.updateMenuItemEnabledState('app.check-for-updates', true)
     })
 
     this.updateManager.on('update-downloaded', (event) => {
       this.menuManager.updateMenuItemEnabledState('app.check-for-updates', true)
+      this.trayManager.updateMenuItemEnabledState('app.check-for-updates', true)
       const win = this.windowManager.getWindow('index')
       win.setProgressBar(0)
     })
@@ -280,34 +343,43 @@ export default class Application extends EventEmitter {
 
     this.updateManager.on('update-error', (event) => {
       this.menuManager.updateMenuItemEnabledState('app.check-for-updates', true)
+      this.trayManager.updateMenuItemEnabledState('app.check-for-updates', true)
     })
   }
 
-  relaunch (page = 'index') {
+  relaunch () {
     this.stop()
     app.relaunch()
     app.exit()
-    // this.closePage(page)
-    // if (page === 'index') {
-    //   this.engine.restart()
-    // }
-    // setTimeout(() => {
-    //   this.showPage(page)
-    // }, 500)
+  }
+
+  savePreference (config = {}) {
+    logger.info('[Motrix] save preference:', config)
+    const { system, user } = config
+    if (!isEmpty(system)) {
+      console.info('[Motrix] main save system config: ', system)
+      this.configManager.setSystemConfig(system)
+      this.engineClient.changeGlobalOption(system)
+    }
+
+    if (!isEmpty(user)) {
+      console.info('[Motrix] main save user config: ', user)
+      this.configManager.setUserConfig(user)
+    }
   }
 
   handleCommands () {
+    this.on('application:save-preference', this.savePreference)
+
     this.on('application:relaunch', () => {
       this.relaunch()
     })
 
-    this.on('application:exit', () => {
-      this.stop()
-      app.exit()
+    this.on('application:quit', () => {
+      this.quit()
     })
 
     this.on('application:open-at-login', (openAtLogin) => {
-      console.log('application:open-at-login===>', openAtLogin)
       if (is.linux()) {
         return
       }
@@ -342,12 +414,34 @@ export default class Application extends EventEmitter {
     })
 
     this.on('application:change-locale', (locale) => {
-      logger.info('[Motrix] application:change-locale===>', locale)
       this.localeManager.changeLanguageByLocale(locale)
         .then(() => {
           this.menuManager.setup(locale)
           this.trayManager.setup(locale)
         })
+    })
+
+    this.on('application:toggle-dock', (visible) => {
+      if (visible) {
+        this.dockManager.show()
+      } else {
+        this.dockManager.hide()
+        // Hiding the dock icon will trigger the entire app to hide.
+        this.show()
+      }
+    })
+
+    this.on('application:auto-hide-window', (hide) => {
+      if (hide) {
+        this.windowManager.handleWindowBlur()
+      } else {
+        this.windowManager.unbindWindowBlur()
+      }
+    })
+
+    this.on('application:change-menu-states', (visibleStates, enabledStates, checkedStates) => {
+      this.menuManager.updateMenuStates(visibleStates, enabledStates, checkedStates)
+      this.trayManager.updateMenuStates(visibleStates, enabledStates, checkedStates)
     })
 
     this.on('application:open-file', (event) => {
@@ -359,8 +453,8 @@ export default class Application extends EventEmitter {
             extensions: ['torrent']
           }
         ]
-      }, (filePaths) => {
-        if (!filePaths || filePaths.length === 0) {
+      }).then(({ canceled, filePaths }) => {
+        if (canceled || filePaths.length === 0) {
           return
         }
 
@@ -371,6 +465,14 @@ export default class Application extends EventEmitter {
 
     this.on('application:clear-recent-tasks', () => {
       app.clearRecentDocuments()
+    })
+
+    this.on('application:setup-protocols-client', (protocols) => {
+      if (is.dev() || is.mas()) {
+        return
+      }
+      logger.info('[Motrix] setup protocols client:', protocols)
+      this.protocolManager.setup(protocols)
     })
 
     this.on('help:official-website', () => {
@@ -394,18 +496,34 @@ export default class Application extends EventEmitter {
     })
   }
 
+  handleEvents () {
+    this.on('download-status-change', (downloading) => {
+      this.trayManager.updateTrayByStatus(downloading)
+      if (downloading) {
+        this.energyManager.startPowerSaveBlocker()
+      } else {
+        this.energyManager.stopPowerSaveBlocker()
+      }
+    })
+
+    this.on('download-speed-change', (speed) => {
+      this.dockManager.setBadge(speed)
+    })
+
+    this.on('task-download-complete', (task, path) => {
+      this.dockManager.openDock(path)
+    })
+  }
+
   handleIpcMessages () {
     ipcMain.on('command', (event, command, ...args) => {
-      logger.log('receive command', command, ...args)
+      logger.log('[Motrix] ipc receive command', command, ...args)
       this.emit(command, ...args)
     })
 
-    ipcMain.on('update-menu-states', (event, visibleStates, enabledStates, checkedStates) => {
-      this.menuManager.updateStates(visibleStates, enabledStates, checkedStates)
-    })
-
-    ipcMain.on('download-status-change', (event, status) => {
-      this.trayManager.updateStatus(status)
+    ipcMain.on('event', (event, eventName, ...args) => {
+      logger.log('[Motrix] ipc receive event', eventName, ...args)
+      this.emit(eventName, ...args)
     })
   }
 }

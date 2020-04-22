@@ -1,6 +1,8 @@
 import { powerSaveBlocker } from 'electron'
 
-let psbId = null
+import logger from './Logger'
+
+let psbId
 export default class EnergyManager {
   startPowerSaveBlocker () {
     if (psbId && powerSaveBlocker.isStarted(psbId)) {
@@ -8,16 +10,16 @@ export default class EnergyManager {
     }
 
     psbId = powerSaveBlocker.start('prevent-app-suspension')
-    console.log('startPowerSaveBlocker===>', psbId)
+    logger.info('[Motrix] start power save blocker:', psbId)
   }
 
   stopPowerSaveBlocker () {
-    if (!psbId || !powerSaveBlocker.isStarted(psbId)) {
+    if (typeof psbId === 'undefined' || !powerSaveBlocker.isStarted(psbId)) {
       return
     }
 
     powerSaveBlocker.stop(psbId)
-    console.log('stopPowerSaveBlocker===>', psbId)
-    psbId = null
+    logger.info('[Motrix] stop power save blocker:', psbId)
+    psbId = undefined
   }
 }

@@ -1,12 +1,13 @@
 import is from 'electron-is'
-import { existsSync } from 'fs'
+import { access, constants } from 'fs'
 import { Message } from 'element-ui'
+
 import {
   isMagnetTask,
   getTaskFullPath,
   bytesToSize
 } from '@shared/utils'
-import { LIGHT_THEME, DARK_THEME } from '@shared/constants'
+import { APP_THEME, TASK_STATUS } from '@shared/constants'
 
 const remote = is.renderer() ? require('electron').remote : {}
 
@@ -24,11 +25,16 @@ export function showItemInFolder (fullPath, { errorMsg }) {
   if (!fullPath) {
     return
   }
-  const result = remote.shell.showItemInFolder(fullPath)
-  if (!result && errorMsg) {
-    Message.error(errorMsg)
-  }
-  return result
+
+  access(fullPath, constants.F_OK, (err) => {
+    console.log(`${fullPath} ${err ? 'does not exist' : 'exists'}`)
+    if (err) {
+      Message.error(errorMsg)
+      return
+    }
+
+    remote.shell.showItemInFolder(fullPath)
+  })
 }
 
 export function openItem (fullPath, { errorMsg }) {
@@ -42,40 +48,44 @@ export function openItem (fullPath, { errorMsg }) {
   return result
 }
 
-export function moveTaskFilesToTrash (task, messages = {}) {
+export function moveTaskFilesToTrash (task) {
   /**
-   * 磁力链接任务，有 bittorrent，但没有 bittorrent.info ，
-   * 在没下完变成BT任务之前 path 不是一个完整路径，
-   * 未避免误删所在目录，所以删除时直接返回 true
+   * For magnet link tasks, there is bittorrent, but there is no bittorrent.info.
+   * The path is not a complete path before it becomes a BT task.
+   * In order to avoid accidentally deleting the directory
+   * where the task is located, it directly returns true when deleting.
    */
   if (isMagnetTask(task)) {
     return true
   }
 
-  const { pathErrorMsg, delFailMsg, delConfigFailMsg } = messages
-  const { dir } = task
+  const { dir, status } = task
   const path = getTaskFullPath(task)
   if (!path || dir === path) {
-    if (pathErrorMsg) {
-      Message.error(pathErrorMsg)
-    }
-    return false
+    throw new Error('task.file-path-error')
   }
 
-  const deleteResult1 = remote.shell.moveItemToTrash(path)
-  if (!deleteResult1 && delFailMsg) {
-    Message.error(delFailMsg)
+  let deleteResult1 = true
+  access(path, constants.F_OK, (err) => {
+    console.log(`${path} ${err ? 'does not exist' : 'exists'}`)
+    if (!err) {
+      deleteResult1 = remote.shell.moveItemToTrash(path)
+    }
+  })
+
+  // There is no configuration file for the completed task.
+  if (status === TASK_STATUS.COMPLETE) {
+    return deleteResult1
   }
 
   let deleteResult2 = true
   const extraFilePath = `${path}.aria2`
-  const isExtraExist = existsSync(extraFilePath)
-  if (isExtraExist) {
-    deleteResult2 = remote.shell.moveItemToTrash(extraFilePath)
-    if (!deleteResult2 && delConfigFailMsg) {
-      Message.error(delConfigFailMsg)
+  access(extraFilePath, constants.F_OK, (err) => {
+    console.log(`${extraFilePath} ${err ? 'does not exist' : 'exists'}`)
+    if (!err) {
+      deleteResult2 = remote.shell.moveItemToTrash(extraFilePath)
     }
-  }
+  })
 
   return deleteResult1 && deleteResult2
 }
@@ -125,10 +135,10 @@ export function clearRecentTasks () {
 }
 
 export function getSystemTheme () {
-  let result = LIGHT_THEME
+  let result = APP_THEME.LIGHT
   if (!is.macOS()) {
     return result
   }
-  result = remote.systemPreferences.isDarkMode() ? DARK_THEME : LIGHT_THEME
+  result = remote.nativeTheme.shouldUseDarkColors ? APP_THEME.DARK : APP_THEME.LIGHT
   return result
 }

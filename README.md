@@ -6,11 +6,11 @@
 
 ## A full-featured download manager
 
-[![GitHub release](https://img.shields.io/github/release/agalwood/Motrix.svg)](https://github.com/agalwood/Motrix/releases) [![Build Status](https://travis-ci.org/agalwood/Motrix.svg?branch=master)](https://travis-ci.org/agalwood/Motrix) [![Build status](https://ci.appveyor.com/api/projects/status/l11d5h05xwwcvoux/branch/master?svg=true)](https://ci.appveyor.com/project/agalwood/motrix/branch/master) [![Total Downloads](https://img.shields.io/github/downloads/agalwood/Motrix/total.svg)](https://github.com/agalwood/Motrix/releases) ![Support Platforms](https://camo.githubusercontent.com/a50c47295f350646d08f2e1ccd797ceca3840e52/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f706c6174666f726d2d6d61634f5325323025374325323057696e646f77732532302537432532304c696e75782d6c69676874677265792e737667)
+[![GitHub release](https://img.shields.io/github/release/agalwood/Motrix.svg)](https://github.com/agalwood/Motrix/releases) [![Build Status](https://travis-ci.com/agalwood/Motrix.svg?branch=master)](https://travis-ci.com/agalwood/Motrix) [![Build status](https://ci.appveyor.com/api/projects/status/l11d5h05xwwcvoux/branch/master?svg=true)](https://ci.appveyor.com/project/agalwood/motrix/branch/master) [![Total Downloads](https://img.shields.io/github/downloads/agalwood/Motrix/total.svg)](https://github.com/agalwood/Motrix/releases) ![Support Platforms](https://camo.githubusercontent.com/a50c47295f350646d08f2e1ccd797ceca3840e52/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f706c6174666f726d2d6d61634f5325323025374325323057696e646f77732532302537432532304c696e75782d6c69676874677265792e737667)
 
 English | [简体中文](./README-CN.md)
 
-Motrix is a full-featured download manager that supports downloading HTTP, FTP, BitTorrent, Magnet, Baidu Net Disk, etc.
+Motrix is a full-featured download manager that supports downloading HTTP, FTP, BitTorrent, Magnet, etc.
 
 Motrix has a clean and easy to use interface. I hope you will like it 👻.
 
@@ -27,6 +27,7 @@ It is recommended to install Motrix using the installation package (Motrix-Setup
 If you prefer the portable version, you can use [scoop](https://github.com/lukesampson/scoop) (need Windows 7+) to install Motrix.
 
 ```bash
+scoop bucket add extras
 scoop install motrix
 ```
 
@@ -52,13 +53,17 @@ Run the following command to install:
 yay motrix
 ```
 
+Motrix may need to run with `sudo` for the first time in Linux because there is no permission to create the download session file (`/var/cache/aria2.session`).
+
 ## ✨ Features
 
 - 🕹 Simple and clear user interface
 - 🦄 Supports BitTorrent & Magnet
-- 💾 Supports downloading Baidu Net Disk
+- ☑️ BitTorrent selective download
+- 💾 Supports downloading BD Net Disk
 - 🎛 Up to 10 concurrent download tasks
 - 🚀 Supports 64 threads in a single task
+- 🚥 Supports speed limit
 - 🕶 Mock User-Agent
 - 🔔 Download completed Notification
 - 💻 Ready for Touch Bar (Mac only)
@@ -86,6 +91,10 @@ git clone git@github.com:agalwood/Motrix.git
 cd Motrix
 npm install
 ```
+
+> Error: Electron failed to install correctly, please delete node_modules/electron and try installing again
+
+`Electron` failed to install correctly, please refer to https://github.com/electron/electron/issues/8466#issuecomment-571425574
 
 If you like [Yarn](https://yarnpkg.com/), you can also use `yarn` to install dependencies.
 
@@ -123,14 +132,17 @@ Translations into versions for other languages are welcome 🧐! Please read the
 
 | Key   | Name                | Status       |
 |-------|:--------------------|:-------------|
-| de    | German              | ✔️ [@Schloemicher](https://github.com/Schloemicher) |
+| ca    | Català              | 🚧 [@marcizhu](https://github.com/marcizhu) |
+| de    | Deutsch             | ✔️ [@Schloemicher](https://github.com/Schloemicher) |
 | en-US | English             | ✔️           |
 | fa    | فارسی               | ✔️ [@Nima-Ra](https://github.com/Nima-Ra) |
 | fr    | Français            | ✔️ [@gpatarin](https://github.com/gpatarin) |
 | ja    | 日本語               | ✔️ [@hbkrkzk](https://github.com/hbkrkzk) |
 | ko    | 한국어                | ✔️ [@KOZ39](https://github.com/KOZ39) |
 | pt-BR | Portuguese (Brazil) | ✔️ [@andrenoberto](https://github.com/andrenoberto) |
+| ru    | Русский             | 🚧 [@bladeaweb](https://github.com/bladeaweb) |
 | tr    | Türkçe              | ✔️ [@abdullah](https://github.com/abdullah) |
+| uk    | Українська          | 🚧 [@bladeaweb](https://github.com/bladeaweb) |
 | zh-CN | 简体中文             | ✔️           |
 | zh-TW | 繁體中文             | ✔️ [@Yukaii](https://github.com/Yukaii) |
 

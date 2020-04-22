@@ -1,24 +1,25 @@
 <template>
   <div id="app">
     <mo-title-bar
-      v-if="isRenderer()"
+      v-if="isRenderer"
       :showActions="showWindowActions"
     />
     <router-view />
     <mo-engine-client
       :secret="rpcSecret"
     />
-    <mo-ipc v-if="isRenderer()" />
+    <mo-ipc v-if="isRenderer" />
   </div>
 </template>
 
 <script>
   import is from 'electron-is'
+  import { mapState } from 'vuex'
+  import { getLangDirection } from '@shared/utils'
+  import { APP_THEME } from '@shared/constants'
   import TitleBar from '@/components/Native/TitleBar'
   import EngineClient from '@/components/Native/EngineClient'
   import Ipc from '@/components/Native/Ipc'
-  import { mapState } from 'vuex'
-  import { getLangDirection } from '@shared/utils'
 
   export default {
     name: 'Motrix',
@@ -28,6 +29,7 @@
       [Ipc.name]: Ipc
     },
     computed: {
+      isRenderer () { return is.renderer() },
       ...mapState('app', {
         systemTheme: state => state.systemTheme
       }),
@@ -41,7 +43,7 @@
         dir: state => getLangDirection(state.config.locale)
       }),
       themeClass: function () {
-        if (this.theme === 'auto') {
+        if (this.theme === APP_THEME.AUTO) {
           return `theme-${this.systemTheme}`
         } else {
           return `theme-${this.theme}`
@@ -55,7 +57,6 @@
       }
     },
     methods: {
-      isRenderer: is.renderer,
       updateRootClassName: function () {
         const { themeClass = '', i18nClass = '', dirClass = '' } = this
         const className = `${themeClass} ${i18nClass} ${dirClass}`

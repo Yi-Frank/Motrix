@@ -1,12 +1,22 @@
 import { app } from 'electron'
 import is from 'electron-is'
 import Store from 'electron-store'
+
 import {
   getDhtPath,
   getLogPath,
   getSessionPath,
-  getUserDownloadsPath
+  getUserDownloadsPath,
+  getMaxConnectionPerServer
 } from '../utils/index'
+import {
+  APP_THEME,
+  EMPTY_STRING,
+  APP_RUN_MODE,
+  NGOSANG_TRACKERS_BEST_URL,
+  NGOSANG_TRACKERS_BEST_IP_URL
+} from '@shared/constants'
+import { separateConfig } from '@shared/utils'
 
 export default class ConfigManager {
   constructor () {
@@ -26,75 +36,41 @@ export default class ConfigManager {
    * https://aria2.github.io/manual/en/html/aria2c.html
    *
    * Best bt trackers
-   * https://github.com/ngosang/trackerslist
+   * @see https://github.com/ngosang/trackerslist
+   *
+   * @see https://github.com/XIU2/TrackersListCollection
    */
   initSystemConfig () {
     this.systemConfig = new Store({
       name: 'system',
       defaults: {
-        'all-proxy': '',
+        'all-proxy': EMPTY_STRING,
         'allow-overwrite': true,
         'auto-file-renaming': true,
-        'bt-tracker': [
-          'udp://62.138.0.158:6969/announce',
-          'udp://188.241.58.209:6969/announce',
-          'udp://188.241.58.209:6969/announce',
-          'udp://208.83.20.20:6969/announce',
-          'udp://151.80.120.115:2710/announce',
-          'udp://185.225.17.100:1337/announce',
-          'udp://151.80.120.113:2710/announce',
-          'udp://62.210.88.151:1337/announce',
-          'http://176.113.71.19:6961/announce',
-          'http://104.27.134.253:8080/announce',
-          'udp://5.2.79.219:1337/announce',
-          'udp://91.216.110.52:451/announce',
-          'udp://5.206.58.23:6969/announce',
-          'udp://159.100.245.181:6969/announce',
-          'udp://5.2.79.22:6969/announce',
-          'udp://176.31.241.153:80/announce',
-          'udp://95.211.168.204:2710/announce',
-          'udp://188.246.227.212:80/announce',
-          'udp://51.38.184.185:6969/announce',
-          'udp://51.15.40.114:80/announce',
-          'udp://tracker.coppersurfer.tk:6969/announce',
-          'udp://tracker.open-internet.nl:6969/announce',
-          'udp://tracker.leechers-paradise.org:6969/announce',
-          'udp://exodus.desync.com:6969/announce',
-          'udp://tracker.internetwarriors.net:1337/announce',
-          'udp://9.rarbg.to:2710/announce',
-          'udp://9.rarbg.me:2710/announce',
-          'udp://tracker.opentrackr.org:1337/announce',
-          'http://tracker3.itzmx.com:6961/announce',
-          'http://tracker1.itzmx.com:8080/announce',
-          'udp://open.demonii.si:1337/announce',
-          'udp://tracker.torrent.eu.org:451/announce',
-          'udp://tracker.tiny-vps.com:6969/announce',
-          'udp://tracker.cyberia.is:6969/announce',
-          'udp://denis.stalker.upeer.me:6969/announce',
-          'udp://thetracker.org:80/announce',
-          'udp://bt.xxx-tracker.com:2710/announce',
-          'udp://open.stealth.si:80/announce',
-          'udp://tracker.port443.xyz:6969/announce',
-          'udp://ipv4.tracker.harry.lu:80/announce'
-        ].join(','),
+        'bt-tracker': EMPTY_STRING,
         'continue': true,
         'dht-file-path': getDhtPath(4),
         'dht-file-path6': getDhtPath(6),
+        'dht-listen-port': 26701,
         'dir': getUserDownloadsPath(),
+        'listen-port': 21301,
         'max-concurrent-downloads': 5,
-        'max-connection-per-server': is.macOS() ? 64 : 16,
+        'max-connection-per-server': getMaxConnectionPerServer(),
         'max-download-limit': 0,
         'max-overall-download-limit': 0,
         'max-overall-upload-limit': '128K',
         'min-split-size': '1M',
+        'no-proxy': EMPTY_STRING,
         'pause': true,
         'rpc-listen-port': 16800,
-        'rpc-secret': '',
+        'rpc-secret': EMPTY_STRING,
+        'seed-ratio': 1,
         'seed-time': 60,
-        'split': 16,
+        'split': 128,
         'user-agent': 'Transmission/2.94'
       }
     })
+    this.fixSystemConfig()
   }
 
   initUserConfig () {
@@ -109,19 +85,30 @@ export default class ConfigManager {
       //   }
       // },
       defaults: {
-        'all-proxy-backup': '',
+        'all-proxy-backup': EMPTY_STRING,
         'auto-check-update': is.macOS(),
+        'auto-hide-window': false,
+        'auto-sync-tracker': true,
+        'engine-max-connection-per-server': getMaxConnectionPerServer(),
         'hide-app-menu': is.windows() || is.linux(),
+        'keep-window-state': false,
         'last-check-update-time': 0,
+        'last-sync-tracker-time': 0,
         'locale': app.getLocale(),
         'log-path': getLogPath(),
         'new-task-show-downloading': true,
         'open-at-login': false,
+        'protocols': { 'magnet': true, 'thunder': false },
         'resume-all-when-app-launched': false,
-        'keep-window-state': false,
+        'run-mode': APP_RUN_MODE.STANDARD,
         'session-path': getSessionPath(),
         'task-notification': true,
-        'theme': 'auto',
+        'theme': APP_THEME.AUTO,
+        'tracker-source': [
+          NGOSANG_TRACKERS_BEST_IP_URL,
+          NGOSANG_TRACKERS_BEST_URL
+        ],
+        'tray-theme': APP_THEME.AUTO,
         'update-channel': 'latest',
         'use-proxy': false,
         'window-state': {}
@@ -130,12 +117,31 @@ export default class ConfigManager {
     this.fixUserConfig()
   }
 
+  fixSystemConfig () {
+    // Remove aria2c unrecognized options
+    const { others } = separateConfig(this.systemConfig.store)
+    if (!others) {
+      return
+    }
+
+    Object.keys(others).forEach(key => {
+      this.systemConfig.delete(key)
+    })
+  }
+
   fixUserConfig () {
     // Fix the value of open-at-login when the user delete
     // the Motrix self-starting item through startup management.
     const openAtLogin = app.getLoginItemSettings().openAtLogin
     if (this.getUserConfig('open-at-login') !== openAtLogin) {
       this.setUserConfig('open-at-login', openAtLogin)
+    }
+
+    if (this.getUserConfig('tracker-source').length === 0) {
+      this.setUserConfig('tracker-source', [
+        NGOSANG_TRACKERS_BEST_IP_URL,
+        NGOSANG_TRACKERS_BEST_URL
+      ])
     }
   }
 

@@ -5,12 +5,15 @@ body {
 }
 
 body {
-  font-family: 'Monospaced Number', 'Chinese Quote', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-family: "Monospaced Number", "Chinese Quote", -apple-system,
+    BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-variant: tabular-nums;
 }
 
 ::-webkit-scrollbar {
   width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-thumb {
@@ -37,6 +40,10 @@ img {
   max-height: 100%;
 }
 
+iframe {
+  border: 0;
+}
+
 .clearfix {
   @include clearfix();
 }
@@ -49,7 +56,7 @@ img {
 
 .el-progress--line.is-text {
   .el-progress-bar__inner::before {
-    content: '';
+    content: "";
     opacity: 0;
     position: absolute;
     top: 0;
@@ -84,6 +91,9 @@ img {
 .el-message__content {
   line-height: 18px;
   word-break: break-all;
+  a {
+    color: $--link-color;
+  }
 }
 
 .tab-title-dialog {
@@ -107,6 +117,9 @@ img {
   line-height: 1;
   padding-top: 4px;
   color: $--color-info;
+  > a {
+    margin-right: 10px;
+  }
 }
 
 .el-input-number.el-input-number--mini {
@@ -131,6 +144,10 @@ img {
 .draggable {
   -webkit-app-region: drag;
   -webkit-user-select: none;
+}
+
+.non-draggable {
+  -webkit-app-region: no-drag;
 }
 
 .aside {
@@ -224,7 +241,40 @@ img {
   }
   .panel-content {
     position: relative;
-    padding: 16px 36px 52px;
+    padding: 0 36px 0;
     height: 100%;
+  }
+}
+
+.form-actions {
+  background: $--form-actions-background;
+}
+
+@media only screen and (max-width:567px) {
+  .hidden-xs-only {
+    display:none!important
+  }
+}
+
+@media only screen and (min-width: 568px) {
+  .hidden-sm-and-up {
+    display: none !important;
+  }
+}
+@media only screen and (min-width: 568px) and (max-width: 991px) {
+  .hidden-sm-only {
+    display: none !important;
+  }
+}
+
+@media only screen and (max-width: 791px) {
+  .hidden-sm-and-down {
+    display: none !important;
+  }
+}
+
+@media only screen and (min-width: 792px) {
+  .hidden-md-and-up {
+    display: none !important;
   }
 }

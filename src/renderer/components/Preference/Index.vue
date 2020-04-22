@@ -1,6 +1,6 @@
 <template>
   <el-container class="content panel" direction="horizontal">
-    <el-aside width="200px" class="subnav">
+    <el-aside width="200px" class="subnav hidden-xs-only">
       <router-view name="subnav" />
     </el-aside>
     <router-view name="form" />
@@ -10,8 +10,6 @@
 <script>
   export default {
     name: 'mo-content-preference',
-    props: {
-    },
     computed: {
     },
     components: {
@@ -23,9 +21,15 @@
 
 <style lang="scss">
   .form-preference {
-    padding-right: 7%;
+    padding: 16px 7% 64px 0;
     .el-switch__label {
-      font-weight: $--font-weight-secondary;
+      font-weight: normal;
+      color: $--color-text-regular;
+      &.is-active {
+        color: $--color-text-regular;
+      }
+    }
+    .el-checkbox__input.is-checked + .el-checkbox__label {
       color: $--color-text-regular;
     }
     .el-form-item {
@@ -42,13 +46,13 @@
       }
     }
     .el-form-item.el-form-item--mini {
-      margin-bottom: 24px;
+      margin-bottom: 32px;
     }
     .el-form-item__content {
       color: $--color-text-regular;
     }
     .form-item-sub {
-      margin-bottom: 12px;
+      margin-bottom: 8px;
       &:last-of-type {
         margin-bottom: 0;
       }
@@ -59,7 +63,19 @@
     bottom: 0;
     left: auto;
     z-index: 10;
+    width: -webkit-fill-available;
     box-sizing: border-box;
-    padding: 24px 36px 24px 0;
+    padding: 24px 36px;
+    margin-left: -36px;
+    // aside.width + subnav.width + padding-left + scrollbar.width
+    margin-right: 322px;
+  }
+  .action-link {
+    cursor: pointer;
+    color: $--link-color;
+    &:hover {
+      color: $--link-hover-color;
+      text-decoration: underline;
+    }
   }
 </style>

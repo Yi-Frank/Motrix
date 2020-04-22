@@ -1,18 +1,16 @@
-import { remote } from 'electron'
+import { ipcRenderer, remote } from 'electron'
 import is from 'electron-is'
 import { isEmpty } from 'lodash'
 import Aria2 from 'aria2'
 import {
   separateConfig,
   compactUndefined,
+  formatOptionsForEngine,
   mergeTaskResult,
   changeKeysToCamelCase,
   changeKeysToKebabCase
 } from '@shared/utils'
-import {
-  BEST_TRACKERS_URL,
-  BEST_TRACKERS_IP_URL
-} from '@shared/constants'
+import { ENGINE_RPC_HOST } from '@shared/constants'
 
 const application = remote.getGlobal('application')
 
@@ -57,7 +55,9 @@ export default class Api {
       rpcListenPort: port,
       rpcSecret: secret
     } = this.config
+    const host = ENGINE_RPC_HOST
     this.client = new Aria2({
+      host,
       port,
       secret
     })
@@ -96,20 +96,24 @@ export default class Api {
 
   savePreferenceToNativeStore (params = {}) {
     const { user, system, others } = separateConfig(params)
-    if (!isEmpty(system)) {
-      console.info('[Motrix] save system config: ', system)
-      application.configManager.setSystemConfig(system)
-      this.changeGlobalOption(system)
-    }
+    let config = {}
 
     if (!isEmpty(user)) {
       console.info('[Motrix] save user config: ', user)
-      application.configManager.setUserConfig(user)
+      config.user = user
+    }
+
+    if (!isEmpty(system)) {
+      console.info('[Motrix] save system config: ', system)
+      config.system = system
+      this.updateActiveTaskOption(system)
     }
 
     if (!isEmpty(others)) {
-      console.info('[Motrix] save config found iillegal key: ', others)
+      console.info('[Motrix] save config found illegal key: ', others)
     }
+
+    ipcRenderer.send('command', 'application:save-preference', config)
   }
 
   getVersion () {
@@ -117,10 +121,7 @@ export default class Api {
   }
 
   changeGlobalOption (options) {
-    const args = {}
-    Object.keys(options).forEach((key) => {
-      args[key] = `${options[key]}`
-    })
+    const args = formatOptionsForEngine(options)
 
     return this.client.call('changeGlobalOption', args)
   }
@@ -134,6 +135,40 @@ export default class Api {
     })
   }
 
+  getOption (params = {}) {
+    const { gid } = params
+    const args = compactUndefined([gid])
+
+    return new Promise((resolve) => {
+      this.client.call('getOption', ...args)
+        .then((data) => {
+          resolve(changeKeysToCamelCase(data))
+        })
+    })
+  }
+
+  updateActiveTaskOption (options) {
+    this.fetchTaskList({ type: 'active' })
+      .then((data) => {
+        if (isEmpty(data)) {
+          return
+        }
+
+        const gids = data.map((task) => task.gid)
+        this.batchChangeOption({ gids, options })
+      })
+  }
+
+  changeOption (params = {}) {
+    let { gid, options = {} } = params
+    options = formatOptionsForEngine(options)
+
+    const kebabOptions = changeKeysToKebabCase(options)
+    const args = compactUndefined([gid, kebabOptions])
+
+    return this.client.call('changeOption', ...args)
+  }
+
   getGlobalStat () {
     return this.client.call('getGlobalStat')
   }
@@ -141,10 +176,15 @@ export default class Api {
   addUri (params) {
     const {
       uris,
+      outs,
       options
     } = params
-    const tasks = uris.map((uri) => {
-      const args = compactUndefined([[uri], options])
+    const tasks = uris.map((uri, index) => {
+      const kebabOptions = changeKeysToKebabCase(options)
+      if (outs && outs[index]) {
+        kebabOptions['out'] = outs[index]
+      }
+      const args = compactUndefined([[uri], kebabOptions])
       return [ 'aria2.addUri', ...args ]
     })
     return this.client.multicall(tasks)
@@ -155,7 +195,8 @@ export default class Api {
       torrent,
       options
     } = params
-    const args = compactUndefined([torrent, [], options])
+    const kebabOptions = changeKeysToKebabCase(options)
+    const args = compactUndefined([torrent, [], kebabOptions])
     return this.client.call('addTorrent', ...args)
   }
 
@@ -164,7 +205,8 @@ export default class Api {
       metalink,
       options
     } = params
-    const args = compactUndefined([metalink, options])
+    const kebabOptions = changeKeysToKebabCase(options)
+    const args = compactUndefined([metalink, kebabOptions])
     return this.client.call('addMetalink', ...args)
   }
 
@@ -177,11 +219,11 @@ export default class Api {
         [ 'aria2.tellActive', ...activeArgs ],
         [ 'aria2.tellWaiting', ...waitingArgs ]
       ]).then((data) => {
-        console.log('fetchDownloadingTaskList data', data)
+        console.log('[Motrix] fetch downloading task list data:', data)
         const result = mergeTaskResult(data)
         resolve(result)
       }).catch((err) => {
-        console.log('fetchDownloadingTaskList fail===>', err)
+        console.log('[Motrix] fetch downloading task list fail:', err)
         reject(err)
       })
     })
@@ -217,6 +259,12 @@ export default class Api {
     const { gid, keys } = params
     const args = compactUndefined([gid, keys])
     return this.client.call('tellStatus', ...args)
+  }
+
+  fetchTaskItemPeers (params = {}) {
+    const { gid, keys } = params
+    const args = compactUndefined([gid, keys])
+    return this.client.call('getPeers', ...args)
   }
 
   pauseTask (params = {}) {
@@ -275,24 +323,31 @@ export default class Api {
     return this.client.call('removeDownloadResult', ...args)
   }
 
-  startPowerSaveBlocker () {
-    application.energyManager.startPowerSaveBlocker()
-  }
+  multicall (method, params = {}) {
+    let { gids, options = {} } = params
+    options = formatOptionsForEngine(options)
 
-  stopPowerSaveBlocker () {
-    application.energyManager.stopPowerSaveBlocker()
-  }
-
-  fetchBtTrackerFromGitHub () {
-    const now = Date.now()
-    const promises = [
-      fetch(`${BEST_TRACKERS_IP_URL}?t=${now}`).then((res) => res.text()),
-      fetch(`${BEST_TRACKERS_URL}?t=${now}`).then((res) => res.text())
-    ]
-
-    return Promise.all(promises).then((values) => {
-      let result = values.join('\r\n').replace(/^\s*[\r\n]/gm, '')
-      return result
+    const data = gids.map((gid, index) => {
+      const kebabOptions = changeKeysToKebabCase(options)
+      const args = compactUndefined([gid, kebabOptions])
+      return [ method, ...args ]
     })
+    return this.client.multicall(data)
+  }
+
+  batchChangeOption (params = {}) {
+    return this.multicall('aria2.changeOption', params)
+  }
+
+  batchRemoveTask (params = {}) {
+    return this.multicall('aria2.remove', params)
+  }
+
+  batchPauseTask (params = {}) {
+    return this.multicall('aria2.pause', params)
+  }
+
+  batchForcePauseTask (params = {}) {
+    return this.multicall('aria2.forcePause', params)
   }
 }

@@ -1,7 +1,12 @@
 <template>
   <el-container class="content panel" direction="vertical">
     <el-header class="panel-header" height="84">
-      <h4>{{ title }}</h4>
+      <h4 class="hidden-xs-only">{{ title }}</h4>
+      <mo-subnav-switcher
+        :title="title"
+        :subnavs="subnavs"
+        class="hidden-sm-and-up"
+      />
     </el-header>
     <el-main class="panel-content">
       <el-form
@@ -16,16 +21,10 @@
             {{ $t('preferences.lab-warning') }}
           </div>
         </el-form-item>
-        <el-form-item :label="`${$t('preferences.download-protocol')}: `" :label-width="formLabelWidth">
-          <el-col class="form-item-sub" :span="24">
-            <el-switch
-              v-model="form.enableEggFeatures"
-              :active-text="$t('preferences.support-more-download-protocols')"
-              >
-            </el-switch>
-          </el-col>
-        </el-form-item>
-        <el-form-item :label="`${$t('preferences.browser-extensions')}: `" :label-width="formLabelWidth">
+        <el-form-item
+          :label="`${$t('preferences.browser-extensions')}: `"
+          :label-width="formLabelWidth"
+        >
           <el-col class="form-item-sub" :span="24">
             <a target="_blank" href="https://motrix.app/release/BaiduExporter.zip" rel="noopener noreferrer">
               {{ $t('preferences.baidu-exporter') }}
@@ -41,8 +40,17 @@
         </el-form-item>
       </el-form>
       <div class="form-actions">
-        <el-button type="primary" @click="submitForm('labForm')">{{ $t('preferences.save') }}</el-button>
-        <el-button @click="resetForm('labForm')">{{ $t('preferences.discard') }}</el-button>
+        <el-button
+          type="primary"
+          @click="submitForm('labForm')"
+        >
+          {{ $t('preferences.save') }}
+        </el-button>
+        <el-button
+          @click="resetForm('labForm')"
+        >
+          {{ $t('preferences.discard') }}
+        </el-button>
       </div>
     </el-main>
   </el-container>
@@ -51,14 +59,18 @@
 <script>
   import is from 'electron-is'
   import { mapState } from 'vuex'
+  import { cloneDeep } from 'lodash'
+  import SubnavSwitcher from '@/components/Subnav/SubnavSwitcher'
   import '@/components/Icons/info-square'
+  import {
+    calcFormLabelWidth,
+    diffConfig
+  } from '@shared/utils'
 
   const initialForm = (config) => {
-    const {
-      enableEggFeatures
-    } = config
+    // const {
+    // } = config
     const result = {
-      enableEggFeatures
     }
     return result
   }
@@ -66,43 +78,85 @@
   export default {
     name: 'mo-preference-lab',
     components: {
+      [SubnavSwitcher.name]: SubnavSwitcher
     },
-    data: function () {
+    data () {
+      const { locale } = this.$store.state.preference.config
+      const form = initialForm(this.$store.state.preference.config)
+      const formOriginal = cloneDeep(form)
+
       return {
-        formLabelWidth: '23%',
-        form: initialForm(this.$store.state.preference.config),
+        form,
+        formLabelWidth: calcFormLabelWidth(locale),
+        formOriginal,
         rules: {}
       }
     },
     computed: {
-      title: function () {
+      title () {
         return this.$t('preferences.lab')
+      },
+      subnavs: function () {
+        return [
+          {
+            key: 'basic',
+            title: this.$t('preferences.basic'),
+            route: '/preference/basic'
+          },
+          {
+            key: 'advanced',
+            title: this.$t('preferences.advanced'),
+            route: '/preference/advanced'
+          },
+          {
+            key: 'lab',
+            title: this.$t('preferences.lab'),
+            route: '/preference/lab'
+          }
+        ]
       },
       ...mapState('preference', {
         config: state => state.config
       })
     },
-    watch: {
-
-    },
     methods: {
       isRenderer: is.renderer,
+      syncFormConfig () {
+        this.$store.dispatch('preference/fetchPreference')
+          .then((config) => {
+            this.form = initialForm(config)
+            this.formOriginal = cloneDeep(this.form)
+          })
+      },
       submitForm (formName) {
         this.$refs[formName].validate((valid) => {
           if (!valid) {
-            console.log('error submit!!')
+            console.log('[Motrix] preference form valid ===>', valid)
             return false
           }
 
-          console.log('this.form===>', this.form)
-          this.$store.dispatch('preference/save', this.form)
+          const changed = diffConfig(this.formOriginal, this.form)
+          const data = {
+            ...changed
+          }
+          console.log('[Motrix] preference changed data ===>', data)
+
+          this.$store.dispatch('preference/save', data)
+            .then(() => {
+              this.$store.dispatch('app/fetchEngineOptions')
+              this.syncFormConfig()
+              this.$msg.success(this.$t('preferences.save-success-message'))
+            })
+            .catch(() => {
+              this.$msg.success(this.$t('preferences.save-fail-message'))
+            })
+
           if (this.isRenderer()) {
-            this.$electron.ipcRenderer.send('command', 'application:relaunch')
           }
         })
       },
       resetForm (formName) {
-        this.form = initialForm(this.$store.state.preference.config)
+        this.syncFormConfig()
       }
     }
   }

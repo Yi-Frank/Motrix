@@ -1,4 +1,5 @@
 import api from '@/api'
+import { fetchBtTrackerFromSource } from '@shared/utils/tracker'
 import { isEmpty } from 'lodash'
 
 const state = {
@@ -22,7 +23,8 @@ const actions = {
         })
     })
   },
-  save ({ commit }, config) {
+  save ({ commit, dispatch }, config) {
+    dispatch('task/saveSession', null, { root: true })
     if (isEmpty(config)) {
       return
     }
@@ -33,8 +35,8 @@ const actions = {
   changeThemeConfig ({ commit }, theme) {
     commit('UPDATE_PREFERENCE_DATA', { theme })
   },
-  fetchBtTracker () {
-    return api.fetchBtTrackerFromGitHub()
+  fetchBtTracker (_, trackerSource = []) {
+    return fetchBtTrackerFromSource(trackerSource)
   },
   toggleEngineMode () {
 

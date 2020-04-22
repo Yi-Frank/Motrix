@@ -1,20 +1,20 @@
 <template>
-  <el-aside width="78px" :class="['aside', { 'draggable': asideDraggable }]">
+  <el-aside width="78px" :class="['aside', 'hidden-sm-and-down', { 'draggable': asideDraggable }]">
     <div class="aside-inner">
       <mo-logo-mini />
       <ul class="menu top-menu">
-        <li @click="nav('/task')">
+        <li @click="nav('/task')" class="non-draggable">
           <mo-icon name="menu-task" width="20" height="20" />
         </li>
-        <li @click="showAddTask()">
+        <li @click="showAddTask()" class="non-draggable">
           <mo-icon name="menu-add" width="20" height="20" />
         </li>
       </ul>
       <ul class="menu bottom-menu">
-        <li @click="nav('/preference')">
+        <li @click="nav('/preference')" class="non-draggable">
           <mo-icon name="menu-preference" width="20" height="20" />
         </li>
-        <li @click="showAboutPanel">
+        <li @click="showAboutPanel" class="non-draggable">
           <mo-icon name="menu-about" width="20" height="20" />
         </li>
       </ul>
@@ -25,6 +25,7 @@
 <script>
   import is from 'electron-is'
   import { mapState } from 'vuex'
+  import { ADD_TASK_TYPE } from '@shared/constants'
   import LogoMini from '@/components/Logo/LogoMini'
   import '@/components/Icons/menu-task'
   import '@/components/Icons/menu-add'
@@ -45,10 +46,7 @@
       }
     },
     methods: {
-      open (link) {
-        this.$electron.shell.openExternal(link)
-      },
-      showAddTask (taskType = 'uri') {
+      showAddTask (taskType = ADD_TASK_TYPE.URI) {
         this.$store.dispatch('app/showAddTaskDialog', taskType)
       },
       showAboutPanel () {
@@ -61,6 +59,8 @@
       nav (page) {
         this.$router.push({
           path: page
+        }).catch(err => {
+          console.log(err)
         })
       }
     }

@@ -12,7 +12,9 @@ import {
   pick
 } from 'lodash'
 import { resolve } from 'path'
-import { userKeys, systemKeys } from './configKeys'
+
+import { userKeys, systemKeys, needRestartKeys } from '@shared/configKeys'
+import { ENGINE_RPC_HOST } from '@shared/constants'
 
 export function bytesToSize (bytes) {
   const b = parseInt(bytes, 10)
@@ -179,6 +181,11 @@ export function isMagnetTask (task) {
   return bittorrent && !bittorrent.info
 }
 
+export function checkTaskIsSeeder (task) {
+  const { bittorrent, seeder } = task
+  return !!bittorrent && seeder === 'true'
+}
+
 export function getTaskUri (task, btTracker = []) {
   const { files } = task
   let result = ''
@@ -334,7 +341,7 @@ export function splitTextRows (text = '') {
 export function convertCommaToLine (text = '') {
   let arr = text.split(',')
   arr = arr.map((row) => row.trim())
-  const result = arr.join('\n')
+  const result = arr.join('\n').trim()
   return result
 }
 
@@ -516,9 +523,94 @@ export function diffConfig (current = {}, next = {}) {
   const curr = pick(current, Object.keys(next))
   const result = omitBy(next, (val, key) => {
     if (isArray(val)) {
-      return false
+      return JSON.stringify(curr[key]) === JSON.stringify(val)
     }
     return curr[key] === val
   })
   return result
+}
+
+export function calcFormLabelWidth (locale) {
+  return locale.startsWith('de') ? '28%' : '25%'
+}
+
+export function parseHeader (header = '') {
+  header = header.trim()
+  let result = {}
+  if (!header) {
+    return result
+  }
+
+  const headers = splitTextRows(header)
+  headers.forEach((line) => {
+    const index = line.indexOf(':')
+    const name = line.substr(0, index)
+    const value = line.substr(index + 1).trim()
+    result[name] = value
+  })
+  result = changeKeysToCamelCase(result)
+
+  return result
+}
+
+export function formatOptionsForEngine (options) {
+  const result = {}
+
+  Object.keys(options).forEach((key) => {
+    result[key] = `${options[key]}`
+  })
+
+  return result
+}
+
+export function buildRpcUrl (options) {
+  const { port, secret } = options
+  let result = `${ENGINE_RPC_HOST}:${port}/jsonrpc`
+  if (secret) {
+    result = `token:${secret}@${result}`
+  }
+  result = `http://${result}`
+
+  return result
+}
+
+export function checkIsNeedRestart (changed = {}) {
+  let result = false
+
+  if (isEmpty(changed)) {
+    return result
+  }
+
+  const kebabCaseChanged = changeKeysToKebabCase(changed)
+  needRestartKeys.some((key) => {
+    if (kebabCaseChanged.hasOwnProperty(key)) {
+      result = true
+      return true
+    }
+  })
+
+  return result
+}
+
+export const checkIsNeedRun = (enable, lastTime, interval) => {
+  if (!enable) {
+    return false
+  }
+
+  return (Date.now() - lastTime > interval)
+}
+
+export const getRandomInt = (min = 0, max = 10000) => {
+  let result = min
+  const range = max - min
+  result += Math.floor(Math.random() * Math.floor(range))
+  return result
+}
+
+export const intersection = (array1 = [], array2 = []) => {
+  if (array1.length === 0 || array2.length === 0) {
+    return []
+  }
+
+  return array1.filter(value => array2.includes(value))
 }

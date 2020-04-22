@@ -7,12 +7,20 @@
  */
 export const availableLanguages = [
   {
+    value: 'ca',
+    label: 'Català'
+  },
+  {
     value: 'de',
     label: 'Deutsch'
   },
   {
     value: 'en-US',
     label: 'English'
+  },
+  {
+    value: 'es',
+    label: 'Español'
   },
   {
     value: 'fa',
@@ -35,6 +43,10 @@ export const availableLanguages = [
     label: 'Português (Brasil)'
   },
   {
+    value: 'ru',
+    label: 'Русский'
+  },
+  {
     value: 'tr',
     label: 'Türkçe'
   },
@@ -45,6 +57,10 @@ export const availableLanguages = [
   {
     value: 'zh-TW',
     label: '繁體中文'
+  },
+  {
+    value: 'uk',
+    label: 'Українська'
   }
 ]
 
@@ -57,8 +73,16 @@ function checkLngIsAvailable (locale) {
  * @param { String } locale
  * https://electronjs.org/docs/api/locales
  *
- * You need to add a fallback when there are
- * multiple locale keys with the same prefix
+ * Only these locales need to add a `startsWith` fallback
+ * when there are with the same prefix
+ *
+ * de, de-AT, de-CH, de-DE
+ * en, en-AU, en-CA, en-GB, en-NZ, en-US, en-ZA
+ * es, es-419
+ * fr, fr-CA, fr-CH, fr-FR
+ * it, it-CH, it-IT
+ * pt, pt-BR, pt-PT
+ * zh, zh-CN, zh-TW
  */
 export function getLanguage (locale = 'en-US') {
   if (checkLngIsAvailable(locale)) {
@@ -71,6 +95,10 @@ export function getLanguage (locale = 'en-US') {
 
   if (locale.startsWith('en')) {
     return 'en-US'
+  }
+
+  if (locale.startsWith('es')) {
+    return 'es'
   }
 
   // If there is a pt-PT translation in the future,
